@@ -23,7 +23,7 @@ const INITIAL_ITEMS = [
   { id: 6, qty: 1, description: 'Wall Cabinet 24"x36"', height: 36, width: 12, depth: 24, price: 118, link: "https://www.homedepot.com/p/330823673", location: "", category: "kitchen" },
 ];
 
-const EMPTY_ITEM = { qty: 1, description: "", height: "", width: "", depth: "", price: "", link: "", location: "", category: "kitchen" };
+const EMPTY_ITEM = { qty: 1, qtyUsed: "", description: "", height: "", width: "", depth: "", price: "", link: "", location: "", category: "kitchen" };
 const EMPTY_SQFT = { description: "", costPerSqFt: "", roomLength: "", roomWidth: "", wasteBuffer: 10, link: "", category: "flooring" };
 
 function encodeProject(projectName, items, sqftItems, propertyValue) {
@@ -236,7 +236,7 @@ export default function AllyTracker() {
           </div>
 
           <div style={{ display: "flex", gap: 6, marginTop: 16, flexWrap: "wrap" }}>
-            {[["tracker","Tracker"],["sqft","Sq Ft Calc"],["roi","ROI"],["share","Share"]].map(([t, label]) => (
+            {[["tracker","Tracker"],["sqft","Sq Ft Calc"],["roi","ROI"],["leftover","Leftovers"],["share","Share"]].map(([t, label]) => (
               <button key={t} onClick={() => setView(t)} style={btn(view === t)}>{label}</button>
             ))}
           </div>
@@ -257,7 +257,7 @@ export default function AllyTracker() {
               <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 14, padding: 18, marginBottom: 20 }}>
                 <h2 style={{ fontSize: 13, fontWeight: 700, color: "#f5c842", letterSpacing: 2, marginBottom: 14, marginTop: 0 }}>+ ADD MATERIAL</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 10 }}>
-                  {[["Description","description","text","Cabinet, Flooring..."],["Qty","qty","number","1"],["Price ($)","price","number","0.00"],["Height","height","number","34.5"],["Width","width","number","24"],["Depth","depth","number","24"],["Location/Notes","location","text","Room or address"]].map(([label,field,type,ph]) => (
+                  {[["Description","description","text","Cabinet, Flooring..."],["Qty Purchased","qty","number","1"],["Qty Used","qtyUsed","number","0"],["Price ($)","price","number","0.00"],["Height","height","number","34.5"],["Width","width","number","24"],["Depth","depth","number","24"],["Location/Notes","location","text","Room or address"]].map(([label,field,type,ph]) => (
                     <div key={field}>
                       <label style={{ fontSize: 10, color: "#888", letterSpacing: 1, display: "block", marginBottom: 4 }}>{label.toUpperCase()}</label>
                       <input type={type} placeholder={ph} value={newItem[field]} onChange={e => setNewItem({ ...newItem, [field]: e.target.value })} style={inp} />
@@ -287,7 +287,7 @@ export default function AllyTracker() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "#111" }}>
-                      {["Qty","Description","H x W x D","Category","Price","Subtotal","Location","Link",...(!isReadOnly ? [""] : [])].map(h => (
+                      {["Qty","Used","Left","Description","H x W x D","Category","Price","Subtotal","Location","Link",...(!isReadOnly ? [""] : [])].map(h => (
                         <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "#666", fontWeight: 700, fontSize: 10, letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
@@ -296,6 +296,20 @@ export default function AllyTracker() {
                     {items.map((item, idx) => (
                       <tr key={item.id} style={{ borderTop: "1px solid #222", background: idx % 2 === 0 ? "#1a1a1a" : "#161616" }}>
                         <td style={{ padding: "10px 12px", color: "#aaa" }}>{item.qty}</td>
+                        <td style={{ padding: "10px 12px" }}>
+                          {!isReadOnly ? (
+                            <input type="number" value={item.qtyUsed ?? ""} placeholder="0"
+                              onChange={e => setItems(items.map(i => i.id === item.id ? { ...i, qtyUsed: e.target.value } : i))}
+                              style={{ width: 50, background: "#111", border: "1px solid #333", borderRadius: 6, padding: "4px 6px", color: "#fff", fontSize: 12 }} />
+                          ) : <span style={{ color: "#aaa" }}>{item.qtyUsed ?? "—"}</span>}
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          {item.qtyUsed !== "" && item.qtyUsed !== undefined ? (
+                            <span style={{ fontWeight: 700, color: Number(item.qty) - Number(item.qtyUsed) > 0 ? "#f5c842" : "#4ade80" }}>
+                              {Number(item.qty) - Number(item.qtyUsed)}
+                            </span>
+                          ) : <span style={{ color: "#555" }}>—</span>}
+                        </td>
                         <td style={{ padding: "10px 12px", color: "#fff", fontWeight: 600 }}>{item.description}</td>
                         <td style={{ padding: "10px 12px", color: "#888", whiteSpace: "nowrap" }}>{item.height}x{item.width}x{item.depth}</td>
                         <td style={{ padding: "10px 12px" }}>
@@ -447,6 +461,85 @@ export default function AllyTracker() {
             </div>
           </div>
         )}
+
+        {view === "leftover" && (() => {
+          const leftoverItems = items.filter(i => i.qtyUsed !== "" && i.qtyUsed !== undefined && (Number(i.qty) - Number(i.qtyUsed)) > 0);
+          const noDataItems = items.filter(i => i.qtyUsed === "" || i.qtyUsed === undefined);
+          const totalLeftoverValue = leftoverItems.reduce((sum, i) => sum + (Number(i.qty) - Number(i.qtyUsed)) * Number(i.price), 0);
+          const totalPurchased = items.reduce((sum, i) => sum + Number(i.price) * Number(i.qty), 0);
+          const wastePercent = totalPurchased > 0 ? ((totalLeftoverValue / totalPurchased) * 100).toFixed(1) : 0;
+          return (
+            <div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+                {[
+                  { label: "Leftover Items", value: leftoverItems.length, color: "#f5c842" },
+                  { label: "Leftover Value", value: `$${totalLeftoverValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, color: "#f97316" },
+                  { label: "Waste %", value: `${wastePercent}%`, color: "#c084fc" },
+                  { label: "Still Tracking", value: noDataItems.length, color: "#888" },
+                ].map(s => (
+                  <div key={s.label} style={{ background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 10, padding: "10px 16px", flex: 1, minWidth: 120 }}>
+                    <div style={{ fontSize: 10, color: "#888", letterSpacing: 1 }}>{s.label}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+              {leftoverItems.length > 0 ? (
+                <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
+                  <div style={{ padding: "14px 18px", borderBottom: "1px solid #2a2a2a" }}>
+                    <h2 style={{ fontSize: 13, fontWeight: 700, color: "#f5c842", letterSpacing: 2, margin: 0 }}>LEFTOVER MATERIALS</h2>
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#111" }}>
+                          {["Material","Purchased","Used","Left Over","Unit Price","Leftover Value","Location"].map(h => (
+                            <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "#666", fontWeight: 700, fontSize: 10, letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leftoverItems.map((item, idx) => {
+                          const leftQty = Number(item.qty) - Number(item.qtyUsed);
+                          const leftValue = leftQty * Number(item.price);
+                          return (
+                            <tr key={item.id} style={{ borderTop: "1px solid #222", background: idx % 2 === 0 ? "#1a1a1a" : "#161616" }}>
+                              <td style={{ padding: "10px 12px", color: "#fff", fontWeight: 600 }}>{item.description}</td>
+                              <td style={{ padding: "10px 12px", color: "#aaa" }}>{item.qty}</td>
+                              <td style={{ padding: "10px 12px", color: "#4ade80" }}>{item.qtyUsed}</td>
+                              <td style={{ padding: "10px 12px" }}>
+                                <span style={{ background: "#2a1a00", color: "#f97316", fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{leftQty}</span>
+                              </td>
+                              <td style={{ padding: "10px 12px", color: "#aaa" }}>${Number(item.price).toLocaleString()}</td>
+                              <td style={{ padding: "10px 12px", color: "#f97316", fontWeight: 700 }}>${leftValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                              <td style={{ padding: "10px 12px", color: "#888" }}>{item.location || "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#444", background: "#1a1a1a", borderRadius: 14, marginBottom: 20 }}>
+                  <div style={{ fontSize: 36, marginBottom: 10 }}>📦</div>
+                  <div style={{ fontSize: 14 }}>No leftovers tracked yet.</div>
+                  <div style={{ fontSize: 12, marginTop: 6, color: "#555" }}>Go to the Tracker tab and fill in Qty Used for each item.</div>
+                </div>
+              )}
+              {noDataItems.length > 0 && (
+                <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 14, padding: 16 }}>
+                  <h3 style={{ fontSize: 12, fontWeight: 700, color: "#888", letterSpacing: 2, margin: "0 0 12px" }}>NEEDS QTY USED ({noDataItems.length} items)</h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {noDataItems.map(item => (
+                      <span key={item.id} style={{ background: "#222", color: "#888", fontSize: 11, padding: "4px 10px", borderRadius: 20 }}>{item.description}</span>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 11, color: "#555", marginTop: 12, marginBottom: 0 }}>Head to the Tracker tab to enter how many of each item were actually used.</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {view === "share" && (
           <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 14, padding: 20 }}>
